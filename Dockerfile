@@ -16,10 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     playwright install chromium
 
 # Copy source
-COPY src/ ./src/
+COPY backend/ ./backend/
+COPY templates/ ./templates/
 
 # Create mount point for data
 VOLUME ["/data"]
 
 ENV PYTHONUNBUFFERED=1
-CMD ["python", "-m", "src.scheduler_app"]
+EXPOSE 5000
+CMD ["python", "-m", "backend.ingestion.scheduler.scheduler_app"]

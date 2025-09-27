@@ -23,6 +23,7 @@ Path(INSTAGRAM_DIR).mkdir(parents=True, exist_ok=True)
 # DOWNLOAD_DIR variable (previously imported from config) to this new path.
 DOWNLOAD_DIR = INSTAGRAM_DIR
 from loguru import logger
+from .metadata_utils import build_metadata, write_sidecar, insert_metadata_to_db
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
  
 INSTAGRAM_BASE = "https://www.instagram.com"
@@ -120,6 +121,26 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
                                 f.write(r.content)
                             downloads_done += 1
                             logger.info("Downloaded video to {} ({} / {})", dest_path, downloads_done, max_downloads)
+
+                            # ------------------------------------------------------------------
+                            # Metadata sidecar
+                            # ------------------------------------------------------------------
+                            try:
+                                metadata = build_metadata(
+                                    original_url=url,
+                                    file_path=str(dest_path.resolve()),
+                                    author=username,
+                                    publish_date=None if not date_str else date_str + "Z",
+                                    length_seconds=None,
+                                    language=None,
+                                    license_=None,
+                                    notes="scraped via Headless_browser module",
+                                )
+                                sidecar = write_sidecar(metadata)
+                                insert_metadata_to_db(metadata)
+                                logger.info("Metadata sidecar + DB log complete for {}", post_id)
+                            except Exception:
+                                logger.exception("Failed to write metadata for {}", dest_path)
                         else:
                             logger.debug("Video {} already exists on disk", dest_path)
                     except Exception as e:

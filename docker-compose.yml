@@ -8,5 +8,5 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ../Staging:/downloads
+      - ./data:/app/data
     restart: unless-stopped

@@ -3,7 +3,25 @@ import os
 import requests
 import time
 from pathlib import Path
-from src.config import DOWNLOAD_DIR  # NOTE: kept as-is; shim in backend.__init__ exposes this
+
+# ---------------------------------------------------------------------------
+# Data directory handling
+# ---------------------------------------------------------------------------
+# All ingestion sources should store raw files inside a shared data folder that
+# can be mounted from the host. We derive the base directory from the DATA_DIR
+# environment variable (default "./data") and create the instagram subfolder on
+# import so that the rest of the scraper logic can assume the directory exists.
+# ---------------------------------------------------------------------------
+BASE_DATA_DIR = os.getenv("DATA_DIR", "./data")
+INSTAGRAM_DIR = os.path.join(BASE_DATA_DIR, "instagram")
+
+# Ensure directories exist at import-time so that the first download does not
+# race to create them concurrently across multiple threads/processes.
+Path(INSTAGRAM_DIR).mkdir(parents=True, exist_ok=True)
+
+# For backward-compatibility with the original code we simply point the local
+# DOWNLOAD_DIR variable (previously imported from config) to this new path.
+DOWNLOAD_DIR = INSTAGRAM_DIR
 from loguru import logger
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
  

@@ -23,6 +23,9 @@ Path(INSTAGRAM_DIR).mkdir(parents=True, exist_ok=True)
 # DOWNLOAD_DIR variable (previously imported from config) to this new path.
 DOWNLOAD_DIR = INSTAGRAM_DIR
 from loguru import logger
+from .metadata_utils import build_metadata, write_sidecar
+from backend.ingestion.download_registry import is_downloaded, record_download
+from backend.config import WAIT_MIN_SECONDS, WAIT_MAX_SECONDS
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
  
 INSTAGRAM_BASE = "https://www.instagram.com"
@@ -108,7 +111,15 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
                     "media_type": media_type,
                 }
 
-                if download and media_type == "video" and video_src and downloads_done < max_downloads:
+                if media_type == "video" and video_src and downloads_done < max_downloads:
+                    if is_downloaded(post_id):
+                        logger.debug("Post {} already recorded; skipping download", post_id)
+                        continue
+
+                    if not download:
+                        logger.debug("download=False, not fetching video but will log metadata")
+                        dest_path = Path(DOWNLOAD_DIR) / f"{post_id}.mp4"
+                    
                     try:
                         Path(DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
                         ts_suffix = post_meta["date_posted"] or str(int(time.time()))
@@ -122,6 +133,23 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
                             logger.info("Downloaded video to {} ({} / {})", dest_path, downloads_done, max_downloads)
                         else:
                             logger.debug("Video {} already exists on disk", dest_path)
+
+                        # Write metadata sidecar regardless of download skip_ffprobe etc.
+                        meta = build_metadata(
+                            original_url=url,
+                            file_path=str(dest_path),
+                            author=username,
+                            publish_date=date_str,
+                            notes="scraped via pipeline"
+                        )
+                        write_sidecar(meta)
+                        record_download(post_id, source_type="instagram", original_url=url, file_path=str(dest_path))
+
+                        # polite delay
+                        import random, time as _time
+                        delay = random.uniform(WAIT_MIN_SECONDS, WAIT_MAX_SECONDS)
+                        logger.debug("Sleeping %.1f seconds to avoid rate-limits", delay)
+                        _time.sleep(delay)
                     except Exception as e:
                         logger.exception("Failed to download video {}: {}", url, e)
 

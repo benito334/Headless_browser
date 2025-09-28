@@ -23,7 +23,7 @@ Path(INSTAGRAM_DIR).mkdir(parents=True, exist_ok=True)
 # DOWNLOAD_DIR variable (previously imported from config) to this new path.
 DOWNLOAD_DIR = INSTAGRAM_DIR
 from loguru import logger
-from .metadata_utils import build_metadata, write_sidecar, insert_metadata_to_db
+from backend.ingestion.metadata.metadata_utils import build_metadata, write_sidecar, insert_metadata_to_db
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
  
 INSTAGRAM_BASE = "https://www.instagram.com"

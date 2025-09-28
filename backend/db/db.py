@@ -39,6 +39,15 @@ def save_new_posts(conn: sqlite3.Connection, posts: List[Dict]):
         )
     logger.info("Saved {} new posts", len(posts))
 
+# Ensure indexes exist for ingested_content when module imported
+try:
+    conn_idx = sqlite3.connect(Path(DOWNLOAD_DIR).parent / "content.db")
+    conn_idx.execute("CREATE INDEX IF NOT EXISTS idx_ingest_date ON ingested_content(ingest_date);")
+    conn_idx.execute("CREATE INDEX IF NOT EXISTS idx_source_type ON ingested_content(source_type);")
+    conn_idx.close()
+except Exception:
+    pass
+
 # ---------------------------------------------------------------------------
 # Ingested content metadata helpers
 # ---------------------------------------------------------------------------

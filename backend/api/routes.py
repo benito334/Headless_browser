@@ -5,7 +5,7 @@ from datetime import datetime
 import json, pathlib, asyncio
 
 from backend.db.db import fetch_metadata
-from backend.ingestion.instagram_ingestion.metadata_utils import insert_metadata_to_db
+from backend.ingestion.metadata.metadata_utils import insert_metadata_to_db
 from backend.ingestion.scheduler.async_bridge import async_scrape
 from backend.ingestion.instagram_ingestion.instagram_scraper import scrape_account_async
 from backend.config import MAX_NEW_VIDEOS_PER_RUN
@@ -60,7 +60,7 @@ async def ingest_now(username: str):
         raise HTTPException(500, str(e))
 
 
-@router.get("/logs/ingestion/{username}")
+@router.get("/logs/instagram/{username}")
 async def get_ingest_logs(username: str):
     files = sorted(LOG_DIR.glob(f"{username}_*.json"))
     return [json.loads(f.read_text()) for f in files]

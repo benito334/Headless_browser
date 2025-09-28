@@ -25,7 +25,7 @@ DOWNLOAD_DIR = INSTAGRAM_DIR
 from loguru import logger
 from .metadata_utils import build_metadata, write_sidecar
 from backend.ingestion.download_registry import is_downloaded, record_download
-from backend.config import WAIT_MIN_SECONDS, WAIT_MAX_SECONDS
+from backend.core.settings import Settings
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
  
 INSTAGRAM_BASE = "https://www.instagram.com"
@@ -147,7 +147,8 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
 
                         # polite delay
                         import random, time as _time
-                        delay = random.uniform(WAIT_MIN_SECONDS, WAIT_MAX_SECONDS)
+                        low, high = Settings.wait_bounds()
+                        delay = random.uniform(low, high)
                         logger.debug("Sleeping %.1f seconds to avoid rate-limits", delay)
                         _time.sleep(delay)
                     except Exception as e:

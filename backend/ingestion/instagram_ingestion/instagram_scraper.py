@@ -122,6 +122,34 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
                             downloads_done += 1
                             logger.info("Downloaded video to {} ({} / {})", dest_path, downloads_done, max_downloads)
 
+                            # Extract video duration via ffprobe
+                            duration_sec = None
+                            try:
+                                import subprocess, json as _json
+                                probe_cmd = [
+                                    "ffprobe",
+                                    "-v",
+                                    "error",
+                                    "-select_streams",
+                                    "v:0",
+                                    "-show_entries",
+                                    "format=duration",
+                                    "-of",
+                                    "json",
+                                    str(dest_path),
+                                ]
+                                probe_out = subprocess.check_output(probe_cmd, stderr=subprocess.STDOUT)
+                                duration_sec = int(float(_json.loads(probe_out)["format"]["duration"]))
+                            except Exception:
+                                logger.warning("Could not determine duration for {}", dest_path)
+
+                            # Simple language heuristic (placeholder)
+                            lang_code = "und"
+
+                            # ------------------------------------------------------------------
+                            # Metadata sidecar
+                            # ------------------------------------------------------------------
+
                             # ------------------------------------------------------------------
                             # Metadata sidecar
                             # ------------------------------------------------------------------
@@ -131,8 +159,8 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
                                     file_path=str(dest_path.resolve()),
                                     author=username,
                                     publish_date=None if not date_str else date_str + "Z",
-                                    length_seconds=None,
-                                    language=None,
+                                    length_seconds=duration_sec,
+                                    language=lang_code,
                                     license_=None,
                                     notes="scraped via Headless_browser module",
                                 )
@@ -157,3 +185,13 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
 
     logger.info("Scraped {} posts from {} ({} videos downloaded)", len(posts), username, downloads_done)
     return posts
+
+# ---------------------------------------------------------------------------
+# Async wrapper so that the scraper can be awaited inside FastAPI or AsyncIO
+# schedulers without blocking the event loop.
+# ---------------------------------------------------------------------------
+import asyncio
+
+async def scrape_account_async(username: str, download: bool = False, max_downloads: int = 1000):
+    """Run blocking scrape_account in a thread; safe to `await`."""
+    return await asyncio.to_thread(scrape_account, username, download, max_downloads)

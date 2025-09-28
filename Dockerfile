@@ -17,11 +17,13 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 
 # Copy source
 COPY backend/ ./backend/
-COPY templates/ ./templates/
 
 # Create mount point for data
 VOLUME ["/data"]
 
 ENV PYTHONUNBUFFERED=1
-EXPOSE 5000
-CMD ["python", "-m", "backend.ingestion.scheduler.scheduler_app"]
+# Install ffmpeg for duration probing
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 8000
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

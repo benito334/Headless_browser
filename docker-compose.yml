@@ -5,8 +5,10 @@ services:
     container_name: instagram_scraper
     env_file:
       - .env
+    environment:
+      - DATA_DIR=/app/data
     ports:
-      - "5000:5000"
+      - "8000:8000"
     volumes:
       - ./data:/app/data
     restart: unless-stopped

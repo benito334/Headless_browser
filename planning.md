@@ -75,7 +75,7 @@ Ingest media → (Instagram scraper module for video/audio) → transcribe and n
 ### Milestone 1 – Instagram Core Integration
 - [x] Import working Instagram scraper → `backend/ingestion/instagram_ingestion/`.
 - [ ] Add async wrapper for scheduler.
-- [ ] Store downloads + metadata in SQLite.
+- [x] Store downloads + metadata in SQLite (implemented – sidecars & SQLite insertion working).
 - [ ] Simple FastAPI endpoint to trigger ingestion.
 - [ ] Log results to UI.
 
@@ -83,6 +83,21 @@ Ingest media → (Instagram scraper module for video/audio) → transcribe and n
 - [ ] Scheduler runs ingestion jobs (interval, cutoff date).
 - [ ] UI: configure accounts, frequency, max downloads/session.
 - [ ] API: `/start`, `/stop`, `/check_now`.
+
+### Milestone 3 – YouTube Ingestion
+
+---
+
+## Progress Notes (2025-09-27)
+
+Milestone 1 is **partially complete**:
+
+- ✅ Instagram scraper downloads videos and writes metadata sidecar JSON files.
+- ✅ Metadata is inserted into SQLite (`ingested_content` table).
+- ⏳ Async scheduler integration, FastAPI trigger endpoint, and UI log display are still in progress.
+- ⏳ Milestones 2–11 have not yet been started.
+
+---
 
 ### Milestone 3 – YouTube Ingestion
 - [ ] Add YouTube URL ingestion (audio download only).

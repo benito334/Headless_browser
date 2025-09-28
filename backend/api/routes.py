@@ -1,49 +1,35 @@
-"""FastAPI routes for backend API."""
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List
+# backend/api/routes.py
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+import asyncio
+import pathlib, json
 from datetime import datetime
-import json, pathlib, asyncio
+from typing import Optional, List
 
-from backend.db.db import fetch_metadata
-from backend.ingestion.metadata.metadata_utils import insert_metadata_to_db
 from backend.ingestion.scheduler.async_bridge import async_scrape
-from backend.ingestion.instagram_ingestion.instagram_scraper import scrape_account_async
+from backend.ingestion.metadata.metadata_utils import insert_metadata_to_db
 from backend.config import MAX_NEW_VIDEOS_PER_RUN
 
 router = APIRouter()
-LOG_DIR = pathlib.Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
+LOG_DIR = pathlib.Path("logs"); LOG_DIR.mkdir(exist_ok=True)
 
+# Simple in-process lock to prevent overlapping scrapes for the same user
+_scrape_locks = {}
 
-@router.get("/metadata")
-async def get_metadata(
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-    source_type: Optional[str] = Query(None, description="Filter by source type e.g. 'instagram'")
-):
-    try:
-        records: List[dict] = fetch_metadata(limit=limit, offset=offset, source_type=source_type)
-        return {
-            "status": "success",
-            "count": len(records),
-            "records": records,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def _get_lock(username: str) -> asyncio.Lock:
+    lock = _scrape_locks.get(username)
+    if lock is None:
+        lock = asyncio.Lock()
+        _scrape_locks[username] = lock
+    return lock
 
-
-@router.get("/test_ingest/{username}")
-async def test_ingest(username: str):
-    """Temporary endpoint to trigger a one-off scrape using async wrapper."""
-    posts = await scrape_account_async(username, True, MAX_NEW_VIDEOS_PER_RUN)
-    return {"status": "success", "records": posts}
-
-
-@router.post("/ingest/instagram/{username}")
-async def ingest_now(username: str):
-    started = datetime.utcnow().isoformat()
-    try:
-        posts = await async_scrape(username, MAX_NEW_VIDEOS_PER_RUN)
+async def _run_scrape(username: str, max_downloads: int):
+    lock = _get_lock(username)
+    if lock.locked():
+        # Another run in-progress; just log and return
+        return
+    async with lock:
+        started = datetime.utcnow().isoformat()
+        posts = await async_scrape(username, max_downloads)
         for p in posts:
             insert_metadata_to_db(p)
         finished = datetime.utcnow().isoformat()
@@ -55,12 +41,14 @@ async def ingest_now(username: str):
         }
         run_file = LOG_DIR / f"{username}_{int(datetime.utcnow().timestamp())}.json"
         run_file.write_text(json.dumps(summary, indent=2))
-        return summary
-    except Exception as e:
-        raise HTTPException(500, str(e))
 
-
-@router.get("/logs/instagram/{username}")
-async def get_ingest_logs(username: str):
-    files = sorted(LOG_DIR.glob(f"{username}_*.json"))
-    return [json.loads(f.read_text()) for f in files]
+@router.post("/ingest/instagram/{username}")
+async def ingest_now(
+    username: str,
+    bg: BackgroundTasks,
+    max_downloads: int = Query(None, ge=0, description="Override MAX_NEW_VIDEOS_PER_RUN"),
+):
+    # Pick a safe test default when not provided
+    md = max_downloads if max_downloads is not None else MAX_NEW_VIDEOS_PER_RUN
+    bg.add_task(_run_scrape, username, md)
+    return {"status": "accepted", "username": username, "max_downloads": md}

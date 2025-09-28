@@ -29,7 +29,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 INSTAGRAM_BASE = "https://www.instagram.com"
  
  
-def scrape_account(username: str, download: bool = False, max_downloads: int = 1000) -> List[Dict]:
+def scrape_account(username: str, download: bool = False, max_downloads: int = 1000, *, skip_ffprobe: bool = False) -> List[Dict]:
     """Scrape the Instagram feed of a public account for posts.
 
     Returns list of metadata dicts.
@@ -122,26 +122,41 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
                             downloads_done += 1
                             logger.info("Downloaded video to {} ({} / {})", dest_path, downloads_done, max_downloads)
 
-                            # Extract video duration via ffprobe
+                            # Optional ffprobe enrichment
                             duration_sec = None
-                            try:
-                                import subprocess, json as _json
-                                probe_cmd = [
-                                    "ffprobe",
-                                    "-v",
-                                    "error",
-                                    "-select_streams",
-                                    "v:0",
-                                    "-show_entries",
-                                    "format=duration",
-                                    "-of",
-                                    "json",
-                                    str(dest_path),
-                                ]
-                                probe_out = subprocess.check_output(probe_cmd, stderr=subprocess.STDOUT)
-                                duration_sec = int(float(_json.loads(probe_out)["format"]["duration"]))
-                            except Exception:
-                                logger.warning("Could not determine duration for {}", dest_path)
+                            if not skip_ffprobe:
+                                try:
+                                    logger.info("Running ffprobe for {}", dest_path.name)
+                                    import subprocess, json as _json, shlex
+                                    probe_cmd = [
+                                        "ffprobe",
+                                        "-v",
+                                        "error",
+                                        "-select_streams",
+                                        "v:0",
+                                        "-show_entries",
+                                        "format=duration",
+                                        "-of",
+                                        "json",
+                                        str(dest_path),
+                                    ]
+                                    proc = subprocess.run(
+                                        probe_cmd,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT,
+                                        timeout=30,
+                                        text=True,
+                                    )
+                                    if proc.returncode == 0:
+                                        duration_sec = int(float(_json.loads(proc.stdout)["format"]["duration"]))
+                                    else:
+                                        logger.warning("ffprobe non-zero exit for {}: {}", dest_path, proc.stdout.strip())
+                                except subprocess.TimeoutExpired:
+                                    logger.warning("ffprobe timed out for {}", dest_path)
+                                except Exception:
+                                    logger.exception("ffprobe failed for {}", dest_path)
+                            else:
+                                logger.debug("skip_ffprobe=True → duration not extracted")
 
                             # Simple language heuristic (placeholder)
                             lang_code = "und"
@@ -192,6 +207,6 @@ def scrape_account(username: str, download: bool = False, max_downloads: int = 1
 # ---------------------------------------------------------------------------
 import asyncio
 
-async def scrape_account_async(username: str, download: bool = False, max_downloads: int = 1000):
+async def scrape_account_async(username: str, download: bool = False, max_downloads: int = 1000, *, skip_ffprobe: bool = False):
     """Run blocking scrape_account in a thread; safe to `await`."""
-    return await asyncio.to_thread(scrape_account, username, download, max_downloads)
+    return await asyncio.to_thread(scrape_account, username, download, max_downloads, skip_ffprobe=skip_ffprobe)
